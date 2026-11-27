@@ -17,7 +17,7 @@
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 // Run it twice and the two dossier.json files must be byte-identical.
 
-import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-frontend.ts';
@@ -25,10 +25,16 @@ import { buildDossier } from './vendor/makefun-frontend.ts';
 const repoDir = fileURLToPath(new URL('.', import.meta.url));
 const outputDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
-// Clear the output directory first: a stale screenshot or dossier from an
-// earlier run must never leak into a later entry.
-rmSync(outputDir, { recursive: true, force: true });
+// Make sure the output directory exists, then clear only its CONTENTS —
+// never the directory itself. In the grader the output directory is a
+// volume mount, and removing a mount point throws EBUSY ("Device or
+// resource busy") even with force:true, which used to fail the run. Clearing
+// the files inside it is safe and still keeps a stale screenshot or dossier
+// from an earlier run from leaking into a later entry.
 mkdirSync(outputDir, { recursive: true });
+for (const entry of readdirSync(outputDir)) {
+  rmSync(join(outputDir, entry), { recursive: true, force: true });
+}
 
 cpSync(join(repoDir, 'app'), join(outputDir, 'app'), { recursive: true });
 
